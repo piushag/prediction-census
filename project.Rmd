@@ -1,0 +1,707 @@
+---
+title: "Statistics 501 final Project"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+date: "2022-12-25"
+author: "Debabrata Halder, Piusha Gullapalli, Snehil Verma"
+header-includes:
+    - \usepackage{sectsty}
+    - \allsectionsfont{\color{cyan}}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rlang)
+library(mosaic)
+library(dplyr)
+library(tidyverse)
+```
+
+
+
+# Introduction and data background
+
+This data was extracted by Barry Becker from the 1994 Census database.
+
+The data was extracted to be used for a prediction task to determine whether a person makes over 50K a year.
+
+Conversion of original data as follows:
+
+1. Discretized agrossincome into two ranges with threshold 50,000.
+
+2. Convert U.S. to US to avoid periods.
+
+3. Convert Unknown to "?"
+
+4. Run MLC++ GenCVFiles to generate data,test.
+
+Description of fnlwgt (final weight):
+
+The weights on the CPS files are controlled to independent estimates of the civilian non institutional population of the US.  These are prepared monthly for us by Population Division here at the Census Bureau.
+
+## Attribute information
+
+Parameters -
+
+age: the age of an individual
+
+workclass: a general term to represent the employment status of an individual
+
+fnlwgt: final weight. This is the number of people the census believes the entry represents.
+
+education: the highest level of education achieved by an individual.
+
+education_num: the highest level of education achieved in numerical form.
+
+marital_status: marital status of an individual.
+
+occupation: the general type of occupation of an individual
+
+relationship: represents what this individual is relative to others.
+
+race: Descriptions of an individual’s race
+
+sex: the sex of the individual
+
+capital_gain: capital gains for an individual
+
+capital_loss: capital loss for an individual
+
+hours_per_week: the hours an individual has reported to work per week
+
+native_country: country of origin for an individual
+
+NOTE: Some values in the dataset is marked as "?". It means the value is unknown.
+
+## Loading the data
+
+```{r}
+adult <- read.table("adult.data", sep = ",")
+colnames(adult) <- c("age", "workclass", "fnlwgt", "education", "education_num", "marital_status", "occupation", "relationship", "race", "sex", "capital_gain", "capital_loss", "hours_per_week", "native_country", "fifty_k")
+```
+
+```{r}
+summary(adult)
+```
+
+# Testing realtionship between capital gain and sex
+
+Motivation: we want to find out if the capital gain differs based on sex.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for both gender
+
+Ha: capital gain is not equal.
+
+```{r}
+# adult %>% 
+#   group_by(sex) %>% 
+#   summarise(record_count = n())
+
+female <- filter(adult, str_detect(sex, 'Female'))
+male <- filter(adult, str_detect(sex, 'Male'))
+
+t.test(capital_gain ~ sex, data=adult) # Unpooled
+t.test(capital_gain ~ sex, var.equal=TRUE, data=adult)   # Pooled
+
+gain_sex<-adult %>%
+  group_by(sex) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_sex %>%
+  ggplot(aes(x=sex, y=avg_captital_gain,fill=avg_captital_gain))+
+  geom_tile(color="white",size=0.3)+
+  scale_fill_gradient(low="pink",high="purple")
+
+
+```
+
+## Conclusion
+
+Looking at the p value which is close to 0, we can reject the null hypothesis. 
+
+We have evidence that suggests that the true difference in means between group Female and group Male is not equal to 0. 
+
+We have evidence to say that there is a difference in the average capital gain of Male and Female
+
+```{r}
+t.test(capital_loss ~ sex, data=adult) # Unpooled
+t.test(capital_loss ~ sex, var.equal=TRUE, data=adult)  # Pooled
+```
+
+# Testing relationship between capital gain and race
+
+Motivation: we want to find out if the capital gain differs based on race.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for all race
+
+Ha: there exist a pair of race for which capital gain is not equal.
+
+
+```{r}
+# adult %>%
+#   group_by(race) %>%
+#   summarise(record_count = n())
+
+anov_race <- aov(capital_gain ~ race, data = adult)
+summary(anov_race)
+#TukeyHSD(anov_race) 
+```
+```{r fig.width=10}
+gain_race<-adult %>%
+  group_by(race) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_race %>%
+  ggplot(aes(x=race, y=avg_captital_gain,fill=avg_captital_gain))+
+  geom_tile(color="white",size=0.3)+
+  scale_fill_gradient(low="blue",high="red")
+
+```
+
+```{r fig.height=10}
+plot(TukeyHSD(aov(capital_gain ~ race, data = adult)))
+```
+
+## Conclusion
+
+Since the p-value in our ANOVA table (0.00132) is less than .05, we have sufficient evidence to reject the null hypothesis.
+
+This means we have sufficient evidence to say that the mean capital gain is not equal across different races.
+
+From the Tukey Test, we can see that there is a significant difference between the means for Black- Asian-Pac-Islander and White- Black, and the p values are below the significance level.
+
+From the plots, we can see that the maximum average capital gain is in the race Asian-Pac-Islander.
+
+
+# Testing relationship between capital gain and occupation
+
+Motivation: we want to find out if the capital gain differs based on occupation.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for all occupation
+
+Ha: there exist a pair of occupation for which capital gain is not equal.
+
+
+```{r}
+anov_occ <- aov(capital_gain ~ occupation, data = adult)
+summary(anov_occ)
+#TukeyHSD(anov_occ)
+```
+
+```{r fig.height=20}
+plot(TukeyHSD(aov(capital_gain ~ occupation, data = adult)))
+```
+
+```{r fig.width=20, fig.height=5}
+gain_occupation<-adult %>%
+  group_by(occupation) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_occupation %>%
+  ggplot(aes(x=occupation, y=avg_captital_gain))+
+  geom_tile(color="red",size=1)
+```
+
+## Conclusion
+
+Since the p-value in our ANOVA table (10\^-16) is less than .05, we have sufficient evidence to reject the null hypothesis.
+
+This means we have sufficient evidence to say that the mean capital gain is not equal across different occupation.
+
+From the Tukey test, we can see the p-values for different occupation pairs, and the difference in average capital gain.
+
+From the plots, we can see that the maximum average capital gain is in the occupation of Exec-managerial.
+
+# Testing relationship between capital gain and workclass
+
+Motivation: we want to find out if the capital gain differs based on workclass.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for all workclass
+
+Ha: there exist a pair of workclass for which capital gain is not equal.
+
+```{r}
+anov_wc <- aov(capital_gain ~ workclass, data = adult)
+summary(anov_wc)
+#TukeyHSD(anov_wc)
+```
+```{r fig.height=20}
+plot(TukeyHSD(aov(capital_gain ~ workclass, data = adult)))
+```
+```{r fig.width=10, fig.height=5}
+gain_wc<-adult %>%
+  group_by(workclass) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_wc %>%
+  ggplot(aes(x=workclass, y=avg_captital_gain))+
+  geom_tile(color="red",size=1)
+
+```
+
+
+## Conclusion
+
+Since the p-value in our ANOVA table (10\^-16) is less than .05, we have sufficient evidence to reject the null hypothesis.
+
+This means we have sufficient evidence to say that the mean capital gain is not equal across different workclass.
+
+From the Tukey test, we can see the p-values for different occupation pairs, and the difference in average capital gain.
+
+From the plots, we can see that the maximum average capital gain is in the occupation of Self-emp-inc.
+
+# Testing relationship between capital gain and education level
+
+Motivation: we want to find out if the capital gain differs based on education level.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for education level
+
+Ha: there exist a pair of education level for which capital gain is not equal.
+
+```{r}
+# adult %>%
+#   group_by(education) %>%
+#   summarise(record_count = n())
+
+anov_edu <- aov(capital_gain ~ education, data = adult)
+summary(anov_edu)
+#TukeyHSD(anov_edu)
+```
+
+```{r fig.height=10}
+plot(TukeyHSD(aov(capital_gain ~ education, data = adult)))
+```
+
+```{r fig.width=15, fig.height=5}
+
+gain_edu<-adult %>%
+  group_by(education) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_edu %>%
+  ggplot(aes(x=education, y=avg_captital_gain))+
+  geom_tile(color="purple",size=1)
+
+```
+
+```{r}
+#Checking for education number
+
+anov_edu_num <- aov(capital_gain ~ education_num, data = adult)
+# summary(anov_edu_num)
+# anov_edu_num
+
+gain_edu_num<-adult %>%
+  group_by(education_num) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_edu_num %>%
+  ggplot(aes(x=education_num, y=avg_captital_gain))+
+  geom_tile(color="blue",size=1)
+```
+
+## Conclusion
+
+Since the p-value in our ANOVA table is less than .05, we have sufficient evidence to reject the null hypothesis.
+
+This means we have sufficient evidence to say that the mean capital gain is not equal across different education levels.
+
+From the Tukey test, we can see the p-values for different education pairs, and the difference in average capital gain.
+
+From the plots, we can see that the maximum average capital gain is with the education prof school.
+
+# Plotting capital gain on education and sex
+
+```{r}
+education_sex<-adult %>%
+  group_by(sex, education) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+education_sex %>%
+  ggplot(aes(x=sex,y=education,fill=avg_captital_gain))+
+  geom_tile(color="white",size=0.3)+
+  scale_fill_gradient(low="pink",high="purple")
+```
+
+# Plotting capital gain on race and sex
+
+```{r}
+race_sex<-adult %>%
+  group_by(sex, race) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+race_sex %>%
+  ggplot(aes(x=sex,y=race,fill=avg_captital_gain))+
+  geom_tile(color="white",size=0.3)+
+  scale_fill_gradient(low="pink",high="purple")
+
+```
+
+# Average capital gain vs earning greater than or less than or equal to 50k
+
+Motivation: we want to find out if the capital gain differs based on earning.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for who earns 50k and who doesn't.
+
+Ha: capital gain is not equal for who earns 50k and who doesn't.
+
+```{r}
+# adult %>%
+#   group_by(fifty_k) %>%
+#   summarise(record_count = n())
+
+
+t.test(capital_gain ~ fifty_k, data=adult) # Unpooled
+t.test(capital_gain ~ fifty_k, var.equal=TRUE, data=adult)   # Pooled
+
+gain_fifty<-adult %>%
+  group_by(fifty_k) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_fifty %>%
+  ggplot(aes(x=fifty_k, y=avg_captital_gain,fill=avg_captital_gain))+
+  geom_tile(color="white",size=0.3)+
+  scale_fill_gradient(low="pink",high="purple")
+
+
+```
+
+
+## Conclusion
+
+Looking at the p value which is close to 0, we can reject the null hypothesis.
+
+We have evidence that suggests that the true difference in means between group that earns less than or equal to 50k and more than 50 is not equal to 0.
+
+We have evidence to say that there is a significant difference in the average capital gain.
+
+# Testing relationship between capital gain and marital status
+
+Motivation: we want to find out if the capital gain differs based on marital status
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for all marital status.
+
+Ha: there exist a pair of marital status for which capital gain is not equal.
+
+
+```{r}
+# adult %>%
+#   group_by(race) %>%
+#   summarise(record_count = n())
+
+anov_race <- aov(capital_gain ~ marital_status, data = adult)
+summary(anov_race)
+#TukeyHSD(anov_race)
+```
+
+```{r fig.height=10}
+plot(TukeyHSD(aov(capital_gain ~ marital_status, data = adult)))
+```
+
+```{r fig.width=15, fig.height=4}
+gain_marital<-adult %>%
+  group_by(marital_status) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_marital %>%
+  ggplot(aes(x=marital_status, y=avg_captital_gain,fill=avg_captital_gain))+
+  geom_tile(color="white",size=0.3)+
+  scale_fill_gradient(low="blue",high="red")
+
+```
+
+## Conclusion
+
+Since the p-value in our ANOVA table is less than .05, we have sufficient evidence to reject the null hypothesis.
+
+This means we have sufficient evidence to say that the mean capital gain is not equal across different marital-status.
+
+From the Tukey test, we can see the p-values for different marital status pairs, and the difference in average capital gain.
+
+From the plots, we can see that the maximum average capital gain is with married-civ-spouse.
+
+# Testing relationship between capital gain and native country
+
+Motivation: we want to find out if the capital gain differs based on native country.
+
+## Assumptions
+
+1. The dataset is a random sample of original population.
+
+2. The data comes from a normal distribution.
+
+3. The sample size is large enough to conduct any test.
+
+4. And the final assumptions is homogeneity of variance. 
+
+## Hypothesis
+
+H0: capital gain is equal for different native countries
+
+Ha: there exist a pair of native countries for which capital gain is not equal.
+
+```{r fig.width=30, fig.height=15}
+# adult %>%
+#   group_by(native_country) %>%
+#   summarise(record_count = n())
+
+anov_country <- aov(capital_gain ~ native_country, data = adult)
+summary(anov_country)
+
+gain_country<-adult %>%
+  group_by(native_country) %>%
+  summarize(avg_captital_gain=mean(capital_gain))
+
+gain_country %>%
+  ggplot(aes(x=native_country, y=avg_captital_gain))+
+  geom_tile(color="red",size=1)
+
+```
+
+## Conclusion
+
+Since the p-value in our ANOVA table is greater than .05, we do not have sufficient evidence to reject the null hypothesis.
+
+This means we do not have sufficient evidence to say that the mean capital gain is not equal across different native countries.
+
+From the plots, we can see that the maximum average capital gain is for native country India.
+
+# Linear Regression on Census Data
+
+```{r}
+xyplot(capital_gain ~ age, data=adult)
+```
+
+As from initial plot, we can see that capital gain and age not in linear relationship, there is no point to fit a linear model with the data. 
+
+We checked if linear regression can be used for any of the numerical attributes vs capital gain, but we noticed no significant information that points to a linear relationship, hence we did not use any linear models.
+
+# Summary
+
+After analyzing the dataset, we concluded following points.
+
+1. Capital gain is not equal and varies based on multiple factors.
+
+2. On average a male has higher capital gain than a female.
+
+3. The capital gain differs based on race. 
+
+4. From hypothesis tests, we also observed that work class, occupation and education levels also play major role deciding the capital gain. Capital gain is not equal across all these attributes. 
+
+
+# Real Estate data set
+
+## Introduction
+
+We performed analysis on an additional real estate data set since we found it interesting. This dataset has various attributes which could potentially affect house prices such as number of convenience stores, distance from metro stations and we aim to analyze and find if a linear relationship exists between the house price ( Y ) and any of the other parameters. This dataset has 414 observations.
+
+### Attributes
+
+1) X1.transaction.date - Date of transaction
+
+2) X2.house.age - Age of the property
+
+3) X3.distance.to.the.nearest.MRT.station - Distance to nearest metro station
+
+4) X4.number.of.convenience.stores - Number of convenience stores
+
+5) X5.latitude - Latitude 
+
+6) X6.longitude - Longitude
+
+7) Y.house.price.of.unit.area - Price of house per area ( Response variable )
+
+### Loading the data
+
+```{r}
+real_estate <- read.csv("Real_Estate.csv")
+summary(real_estate)
+ls(real_estate)
+
+pairs(real_estate[,2:8], pch=19)
+
+#xyplot(Y.house.price.of.unit.area ~ X4.number.of.convenience.stores,data=real_estate)  # positive trend
+#xyplot(Y.house.price.of.unit.area ~ X3.distance.to.the.nearest.MRT.station,data=real_estate)  # negative trend
+
+# study with distance to metro station.
+
+#check value distribution.
+histogram(~Y.house.price.of.unit.area, data=real_estate, nint=20)     
+
+```
+
+## Testing if house price varies with distance to metro station
+
+```{r}
+#check correlation between house price and distance to metro station.
+cor(Y.house.price.of.unit.area ~ X3.distance.to.the.nearest.MRT.station, data=real_estate) # -0.673
+
+#the least squares line  regression line.
+m1 <- lm(Y.house.price.of.unit.area ~ X3.distance.to.the.nearest.MRT.station, data=real_estate)
+summary(m1)
+
+
+#xy plot
+xyplot(Y.house.price.of.unit.area ~ X3.distance.to.the.nearest.MRT.station,data=real_estate,type=c("p","r"))  # negative
+```
+
+### Assumptions
+
+1. Residual are uniformly distributed around y=0 horizontal line.
+
+2. Residual follows normal distribution.
+
+3. The relationship between two variables should be linear.
+
+4. The observation should be independent of each other.
+
+```{r}
+#normalty check of errors/residual and assumptions check *
+xyplot(resid(m1)~fitted(m1), data=real_estate, type=c("p","r"))
+histogram(residuals(m1),width=5)
+ladd(panel.qqmathline(resid(m1)))
+plot(resid(m1))
+plot(density(resid(m1)))
+qqnorm(resid(m1))
+qqline(resid(m1))
+```
+
+### Conclusion
+
+All assumptions holds here. From different graphs we can see that the conditions for linear model fitting holds. 
+
+## Testing if house price varies with number of convenience stores
+
+```{r}
+m2 <- lm(Y.house.price.of.unit.area ~  X4.number.of.convenience.stores,  data=real_estate)
+summary(m2)
+```
+
+## Testing if house price varies with house age.
+
+
+```{r}
+m3 <- lm(Y.house.price.of.unit.area ~ X2.house.age,  data=real_estate)
+summary(m3)
+ggplot(real_estate, aes( X2.house.age, Y.house.price.of.unit.area)) + geom_point() + stat_smooth(method = lm)
+```
+### Assumptions
+
+1. Residual are uniformly distributed around y=0 horizontal line.
+
+2. Residual follows normal distribution.
+
+3. The relationship between two variables should be linear.
+
+4. The observation should be independent of each other.
+
+```{r}
+xyplot(resid(m1)~fitted(m3), data=real_estate, type=c("p","r"))
+histogram(residuals(m3),width=5)
+ladd(panel.qqmathline(resid(m3)))
+plot(resid(m3))
+plot(density(resid(m3)))
+qqnorm(resid(m3))
+qqline(resid(m3))
+```
+
+### Conclusion
+
+From the above graphs, the relationship between house price and house age is not linear, and from Q_Q plot also, we can see that the residuals are not on a straight lines and uniform distribution of error around y=0 horizontal lines doesn't hold also, so we should not use linear model to predict the house price based on house age. And if we build the model, we can see that the R-squared value is around 4%, which also indicates linear model is not suitable to predict the house price based on house age.
+
+## Summary
+
+After analyzing the the dataset we found following points:
+
+1. The price of a house depends on house age, distance to the nearest metro stations, number of convenience stores nearby etc, but it need not to be they are linearly dependent.
+
+2. For house price and distance to nearest metro station, there exist a liner relationship and for that reason, we are able to fit a linear model.
+
+3. Whereas the number of convenience stores and house age is not linearly dependent, so we could not fit any linear model there. We checked the assumptions and reported where it failed to hold the conditions. 
